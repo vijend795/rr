@@ -43,25 +43,35 @@ class City(BaseModel,CustomIDMixin):
         return f"{self.custom_id}:{self.city_name} {self.state}"
 
 
+
+
+class District(BaseModel,CustomIDMixin):
+    district=models.CharField( max_length=255)
+    city=models.ForeignKey(City, verbose_name='city', on_delete=models.CASCADE,related_name='cities')
+
+class Tehsil(BaseModel,CustomIDMixin):
+    teshil=models.CharField( max_length=255)
+    district=models.ForeignKey(District, verbose_name='district', on_delete=models.CASCADE, related_name='tehsils')
+
+
+
+
+# create locality dynamic with locality type like Sector , colony Vihar etc and can have sub Locality too for specific city 
 class LocalityType(BaseModel,CustomIDMixin):
     locality_type_name=models.CharField(max_length=255, unique=True)
-
     class Meta:
         verbose_name='Locality Type'
         verbose_name_plural='Locality Type'
-        
-
     def __str__(self):
         return f"{self.id}:{self.locality_type_name}"
 
 
-
 class Locality(BaseModel,CustomIDMixin):
-    
     locality_name=models.CharField( max_length=255, verbose_name='Locality Name')
+    # sub_locality_name=models.CharField( max_length=255, verbose_name='Locality Name')
     locality_type=models.ForeignKey(LocalityType, verbose_name='locality Type', on_delete=models.CASCADE, related_name='localities')
-    pin_code=models.PositiveIntegerField(null=True,blank=True)
     city=models.ForeignKey(City, verbose_name="city", on_delete=models.CASCADE,related_name='localities')
+    
     
     class Meta:
         verbose_name="Locality"
@@ -69,9 +79,8 @@ class Locality(BaseModel,CustomIDMixin):
         unique_together = ['locality_name', 'city']
 
     def __str__(self):
-        pin_code_str = f" {self.pin_code}" if self.pin_code is not None else ""
-        return f"{self.custom_id}:{self.locality_type}:{self.locality_name} {self.city} {pin_code_str}"
-
+     
+        return f"{self.custom_id}:{self.locality_type}:{self.locality_name} {self.city}"
 
 class SubLocality(BaseModel,CustomIDMixin):
     sub_locality_name=models.CharField( max_length=255, verbose_name='Sub Locality Name')
@@ -85,31 +94,32 @@ class SubLocality(BaseModel,CustomIDMixin):
     def __str__(self):
        return  f'{self.custom_id}:{self.sub_locality_name},{self.locality}'
 
-class Area(BaseModel, CustomIDMixin):
-    area_name = models.CharField(max_length=255,null=True,blank=True)
-    localities = models.ManyToManyField(Locality, related_name='areas', null=True, blank=True)
-    sub_localities = models.ManyToManyField(SubLocality, related_name='areas', null=True, blank=True)
-    city = models.ForeignKey(City, null=True, blank=True, on_delete=models.SET_NULL, related_name='areas')
 
-    class Meta:
-        verbose_name = "Area"
-        verbose_name_plural = "Areas"
-
-    def __str__(self):
-        return f"{self.custom_id}:{self.area_name}"
-
-    def clean(self):
-        # Ensure that all localities and sub-localities have the same city
-        cities_localities = set(locality.city for locality in self.localities.all())
-        cities_sub_localities = set(sub_locality.locality.city for sub_locality in self.sub_localities.all())
-
-        if len(cities_localities) == 1 and len(cities_sub_localities) == 1 and cities_localities==cities_sub_localities:
-            # Set the unique city as the city attribute for the Area
-            self.city = cities_localities.pop()
-        else:
-            raise ValidationError("All localities and sub-localities must belong to the same city within an Area.")
+# area can have multiple unique locality adn create a area for address 
 
     
+class Area(BaseModel,CustomIDMixin):
+    pin_code=models.CharField( max_length=255,null=True, blank=True)
+
+    class Meta:
+        verbose_name='Area'
+        verbose_name_plural='Area'
+    def __str__(self):
+       return  f'{self.custom_id}:{self.pin_code}'
+
+# now area can have multiple inline with locality and locality type   
+class DynamicRelationAreaLocality(BaseModel,CustomIDMixin):
+    area = models.ForeignKey(Area, on_delete=models.CASCADE)
+    locality_type = models.ForeignKey(LocalityType, on_delete=models.CASCADE)
+    locality = models.ForeignKey(Locality, on_delete=models.CASCADE)
+   
+    
+
+
+
+
+
+
 
 
 class Building(BaseModel,CustomIDMixin):
@@ -149,11 +159,7 @@ class Address(BaseModel,CustomIDMixin):
 
     building = models.ForeignKey(Building, verbose_name="addresses", on_delete=models.CASCADE,related_name='addresses', null=True,blank=True)
     plot_no = models.ManyToManyField(Plot, verbose_name="addresses",related_name='addresses',blank=True)
-    
-    # GenericForeignKey fields
-    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE, null=True, blank=True)
-    object_id = models.PositiveIntegerField(null=True, blank=True)
-    content_object = GenericForeignKey('content_type', 'object_id')
+
 
 
     class Meta:

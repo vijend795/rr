@@ -55,7 +55,7 @@ class NewUser(AbstractUser):
     user_image = models.ImageField(upload_to='user_images/', null=True, blank=True)
     nationality=models.CharField(max_length=255,null=True,blank=True)
     # to avoid circular reference 
-    address=models.ForeignKey("app_address.Address", verbose_name="Address", on_delete=models.PROTECT,null=True,blank=True)
+    # address=models.ForeignKey("app_address.Address", verbose_name="Address", on_delete=models.PROTECT,null=True,blank=True)
     
    
     def __str__(self):
