@@ -65,10 +65,10 @@ class LocalityType(BaseModel,CustomIDMixin):
     def __str__(self):
         return f"{self.id}:{self.locality_type_name}"
 
-
+# Locality Includes sub locality and is sub locality exits then it will create a new locality 
 class Locality(BaseModel,CustomIDMixin):
     locality_name=models.CharField( max_length=255, verbose_name='Locality Name')
-    # sub_locality_name=models.CharField( max_length=255, verbose_name='Locality Name')
+    sub_locality_name=models.CharField( max_length=255, verbose_name='Sub Locality Name',null=True,blank=True)
     locality_type=models.ForeignKey(LocalityType, verbose_name='locality Type', on_delete=models.CASCADE, related_name='localities')
     city=models.ForeignKey(City, verbose_name="city", on_delete=models.CASCADE,related_name='localities')
     
@@ -76,28 +76,21 @@ class Locality(BaseModel,CustomIDMixin):
     class Meta:
         verbose_name="Locality"
         verbose_name_plural="Localities"
-        unique_together = ['locality_name', 'city']
+        unique_together = ['locality_type','sub_locality_name','locality_name', 'city']
 
     def __str__(self):
      
-        return f"{self.custom_id}:{self.locality_type}:{self.locality_name} {self.city}"
-
-class SubLocality(BaseModel,CustomIDMixin):
-    sub_locality_name=models.CharField( max_length=255, verbose_name='Sub Locality Name')
-    locality=models.ForeignKey(Locality, verbose_name='locality', on_delete=models.CASCADE, related_name='sub_localities')
-    
-    class Meta:
-        verbose_name='Sub Locality'
-        verbose_name_plural='Sub Localities'
-        unique_together=['sub_locality_name','locality']
-
-    def __str__(self):
-       return  f'{self.custom_id}:{self.sub_locality_name},{self.locality}'
+        return f"{self.custom_id}:{self.locality_type}:{self.sub_locality_name}, {self.locality_name}, {self.city}"
 
 
 # area can have multiple unique locality adn create a area for address 
 
-    
+# now area can have multiple inline with locality and locality type   
+class DynamicRelationAreaLocality(BaseModel,CustomIDMixin):
+    area = models.ForeignKey('app_address.Area', on_delete=models.CASCADE)
+    locality_type = models.ForeignKey(LocalityType, on_delete=models.CASCADE)
+    locality = models.ForeignKey(Locality, on_delete=models.CASCADE) 
+
 class Area(BaseModel,CustomIDMixin):
     pin_code=models.CharField( max_length=255,null=True, blank=True)
 
@@ -105,21 +98,24 @@ class Area(BaseModel,CustomIDMixin):
         verbose_name='Area'
         verbose_name_plural='Area'
     def __str__(self):
-       return  f'{self.custom_id}:{self.pin_code}'
+        localities = DynamicRelationAreaLocality.objects.filter(area=self)
+        locality_parts = []
+        for relation in localities:
+            locality_full_name = ""
+            if relation.locality.sub_locality_name:
+                locality_full_name += f"{relation.locality.sub_locality_name}-"
+            locality_full_name += relation.locality.locality_name
+            locality_parts.append(locality_full_name)
 
-# now area can have multiple inline with locality and locality type   
-class DynamicRelationAreaLocality(BaseModel,CustomIDMixin):
-    area = models.ForeignKey(Area, on_delete=models.CASCADE)
-    locality_type = models.ForeignKey(LocalityType, on_delete=models.CASCADE)
-    locality = models.ForeignKey(Locality, on_delete=models.CASCADE)
+        locality_names_str = ", ".join(locality_parts)
+       
+        city_name = localities.first().locality.city if localities else "Unknown City"
+     
+        return  f'{self.custom_id}:{locality_names_str}, {city_name},{self.pin_code} '
+
+
    
     
-
-
-
-
-
-
 
 
 class Building(BaseModel,CustomIDMixin):
@@ -135,12 +131,22 @@ class Building(BaseModel,CustomIDMixin):
     def __str__(self):
         return f"{self.custom_id}:{self.building_name}"
     
+class Street(BaseModel,CustomIDMixin):
+    street_name=models.CharField(max_length=255)
+    area=models.ForeignKey(Area, verbose_name='area', on_delete=models.CASCADE,related_name='streets')
+    def __str__(self):
+        return f"{self.custom_id}:{self.street_name},{self.area}"
 
+class Landmark(BaseModel,CustomIDMixin):
+    landmark_name=models.CharField(max_length=255)
+    area=models.ForeignKey(Area, verbose_name='area', on_delete=models.CASCADE,related_name='landmarks')
+    def __str__(self):
+        return f"{self.custom_id}:{self.landmark_name},{self.area}"
 
 class Plot(BaseModel, CustomIDMixin):
     plot_no = models.CharField(max_length=255)
-    area = models.ForeignKey(Area, on_delete=models.CASCADE, related_name='plots', null=True, blank=True)
     building = models.ForeignKey(Building, on_delete=models.CASCADE, related_name='plots', null=True, blank=True)
+    area = models.ForeignKey(Area, on_delete=models.CASCADE, related_name='plots', null=True, blank=True)
 
 
     class Meta:
@@ -150,6 +156,14 @@ class Plot(BaseModel, CustomIDMixin):
 
     def __str__(self):
         return f"{self.custom_id}:{self.plot_no},{self.building},{self.area}"
+
+class StreetPlotRelationship(BaseModel, CustomIDMixin):
+    street = models.ForeignKey(Street, on_delete=models.CASCADE, related_name='street_plot_relationships')
+    plot = models.ForeignKey(Plot, on_delete=models.CASCADE, related_name='street_plot_relationships')
+
+class LandmarkPlotRelationship(BaseModel, CustomIDMixin):
+    landmark = models.ForeignKey(Landmark, on_delete=models.CASCADE, related_name='landmark_plot_relationships')
+    plot = models.ForeignKey(Plot, on_delete=models.CASCADE, related_name='landmark_plot_relationships')
 
 
 # Create your models here.

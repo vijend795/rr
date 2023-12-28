@@ -10,24 +10,37 @@ from .forms import DynamicRelationAreaLocalityForm
 # Register your models here.
 
 
-from app_address.models import Address,City,State,Country,Locality,Plot,Building,LocalityType,SubLocality, Area, DynamicRelationAreaLocality
+from app_address.models import Address,City,State,Country,Locality,Plot,Building,LocalityType, Area, DynamicRelationAreaLocality,Street,Landmark,StreetPlotRelationship, LandmarkPlotRelationship
 
 # Inline 
-class PlotInline(admin.StackedInline):
+class PlotInline(admin.TabularInline):
     model=Plot
     extra=1
 
-class LocalityInline(admin.StackedInline):
+class LocalityInline(admin.TabularInline):
     model=Locality
     extra=1
 
+class DynamicRelationAreaLocalityInline(admin.TabularInline):
+    model = DynamicRelationAreaLocality
+    form=DynamicRelationAreaLocalityForm
+    extra=1
+class StreetPlotRelationshipInline(admin.TabularInline):
+    model = StreetPlotRelationship
+    extra = 1
 
+class LandmarkPlotRelationshipInline(admin.TabularInline):
+    model = LandmarkPlotRelationship
+    extra = 1
 
-class CityInline(admin.StackedInline):
+class CityInline(admin.TabularInline):
     model=City
     extra=1
-class StateInline(admin.StackedInline):
+class StateInline(admin.TabularInline):
     model=State
+    extra=1
+class LocalityInline(admin.TabularInline):
+    model=Locality
     extra=1
 
 
@@ -52,28 +65,11 @@ class LocalityTypeAdmin(admin.ModelAdmin):
 
    
 
-class SubLocalityAdmin(admin.ModelAdmin):
-    list_display=('custom_id','sub_locality_name','locality')
 
-class SubLocalityInline(admin.StackedInline):
-    model=SubLocality
-    extra=1
-class LocalityInline(admin.StackedInline):
-    model=Locality
-    extra=1
 
 class LocalityAdmin(admin.ModelAdmin):
-    list_display=('custom_id','locality_type','locality_name','display_sub_locality','city')
-    inlines=[SubLocalityInline]
-    def display_sub_locality(self,obj):
-        # return ",\n ".join(str(sub_localities) for sub_localities in obj.sub_localities.all())
-        sub_localities = obj.sub_localities.all()
-        if sub_localities:
-            return mark_safe("<br>".join(str(sub_locality) for sub_locality in sub_localities))
-        return ""
-       
-    
-    display_sub_locality.short_description="Sub Localities"
+    list_display=('custom_id','locality_type','sub_locality_name','locality_name','city')
+
 
 class DynamicRelationAreaLocalityAdmin(admin.ModelAdmin):
     form = DynamicRelationAreaLocalityForm
@@ -83,15 +79,12 @@ class DynamicRelationAreaLocalityAdmin(admin.ModelAdmin):
         obj.locality_type = form.cleaned_data['locality_type']
         obj.save()
 
-class DynamicRelationAreaLocalityInline(admin.TabularInline):
-    model = DynamicRelationAreaLocality
-    form=DynamicRelationAreaLocalityForm
-    extra=1
+
 
 class AreaAdmin(admin.ModelAdmin):
     form = DynamicRelationAreaLocalityForm
     list_display=('custom_id','pin_code','display_localities')
-    inlines=[DynamicRelationAreaLocalityInline]
+    inlines=[DynamicRelationAreaLocalityInline,PlotInline]
 
     def display_localities(self, obj):
         localities = DynamicRelationAreaLocality.objects.filter(area=obj).order_by('locality_type__locality_type_name')
@@ -100,17 +93,54 @@ class AreaAdmin(admin.ModelAdmin):
         return ""
     display_localities.short_description = "Localities"
     
+class StreetAdmin(admin.ModelAdmin):
+    list_display=('custom_id','street_name','get_plot_numbers')   
+    inlines=[StreetPlotRelationshipInline]
     
+    def get_plot_numbers(self, obj):
+        plot_numbers = obj.street_plot_relationships.all().order_by('plot__plot_no')
+        # return ", ".join(str(relationship.plot.plot_no) for relationship in plot_numbers)
+        if plot_numbers:
+            return mark_safe("<br>".join(str(relationship.plot.plot_no) for relationship in plot_numbers))
+        return ""
+
+
+    get_plot_numbers.short_description = 'Plot Numbers'
+
+class LandmarkAdmin(admin.ModelAdmin):
+    list_display=('custom_id','landmark_name','get_plot_numbers')  
+    inlines=[LandmarkPlotRelationshipInline] 
+    def get_plot_numbers(self, obj):
+        plot_numbers = obj.landmark_plot_relationships.all().order_by('plot__plot_no')
+        # return ", ".join(str(relationship.plot.plot_no) for relationship in plot_numbers)
+        if plot_numbers:
+            return mark_safe("<br>".join(str(relationship.plot.plot_no) for relationship in plot_numbers))
+        return ""
+
+    get_plot_numbers.short_description = 'Plot Numbers'
+
 
 
 class PlotAdmin(admin.ModelAdmin):
-    list_display=('custom_id','plot_no','building')
-    
+    list_display=('custom_id','plot_no','building','area','get_all_streets','get_all_landmark')
+    inlines=[StreetPlotRelationshipInline,LandmarkPlotRelationshipInline]
 
-    # def display_localities(self,obj):
-    #     return ", ".join(str(locality)for locality in obj.localities.all())
-    
-    # display_localities.short_description="Localities"
+    def get_all_streets(self, obj):
+        street_relationships = obj.street_plot_relationships.all().order_by('street__street_name')
+        # return ", ".join(f"{relationship.street.street_name} (Order: {relationship.order})" for relationship in street_relationships)
+        if street_relationships:
+            return mark_safe("<br>".join(str(relationship.street.street_name)for relationship in street_relationships))
+        return ""
+
+    def get_all_landmark(self, obj):
+        landmark_relationships = obj.landmark_plot_relationships.all().order_by('landmark__landmark_name')
+        # return ", ".join(f"{relationship.landmark.landmark_name} (Order: {relationship.order})" for relationship in landmark_relationships)
+        if landmark_relationships:
+            return mark_safe("<br>".join(str(relationship.landmark.landmark_name)for relationship in landmark_relationships))
+        return ""
+
+    get_all_streets.short_description="Streets"
+    get_all_landmark.short_description="Landmark"
 
 
 
@@ -128,11 +158,13 @@ admin.site.register(Country,CountryAdmin)
 admin.site.register(State,StateAdmin)
 admin.site.register(City,CityAdmin)
 admin.site.register(Locality,LocalityAdmin)
-admin.site.register(SubLocality,SubLocalityAdmin)
+
 admin.site.register(LocalityType,LocalityTypeAdmin)
 admin.site.register(Area,AreaAdmin)
 admin.site.register(Plot,PlotAdmin)
 admin.site.register(Building,BuildingAdmin)
 admin.site.register(Address,AddressAdmin)
+admin.site.register(Street,StreetAdmin)
+admin.site.register(Landmark,LandmarkAdmin)
 admin.site.register(DynamicRelationAreaLocality,DynamicRelationAreaLocalityAdmin)
 
