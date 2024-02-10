@@ -122,7 +122,7 @@ class LandmarkAdmin(admin.ModelAdmin):
 
 
 class PlotAdmin(admin.ModelAdmin):
-    list_display=('custom_id','plot_no','building','area','get_all_streets','get_all_landmark')
+    list_display=('custom_id','plot_no','area','get_all_streets','get_all_landmark')
     inlines=[StreetPlotRelationshipInline,LandmarkPlotRelationshipInline]
 
     def get_all_streets(self, obj):
@@ -146,7 +146,7 @@ class PlotAdmin(admin.ModelAdmin):
 
 class BuildingAdmin(admin.ModelAdmin):
     list_display=('custom_id','building_name')
-    inlines=[PlotInline]
+   
 
 class AddressAdmin(admin.ModelAdmin):
     list_display=('custom_id','unit_no','floor','building')

@@ -114,8 +114,17 @@ class Area(BaseModel,CustomIDMixin):
         return  f'{self.custom_id}:{locality_names_str}, {city_name},{self.pin_code} '
 
 
-   
-    
+class Street(BaseModel,CustomIDMixin):
+    street_name=models.CharField(max_length=255)
+    area=models.ForeignKey(Area, verbose_name='area', on_delete=models.CASCADE,related_name='streets')
+    def __str__(self):
+        return f"{self.custom_id}:{self.street_name},{self.area}"
+
+class Landmark(BaseModel,CustomIDMixin):
+    landmark_name=models.CharField(max_length=255)
+    area=models.ForeignKey(Area, verbose_name='area', on_delete=models.CASCADE,related_name='landmarks')
+    def __str__(self):
+        return f"{self.custom_id}:{self.landmark_name},{self.area}"
 
 
 class Building(BaseModel,CustomIDMixin):
@@ -131,28 +140,15 @@ class Building(BaseModel,CustomIDMixin):
     def __str__(self):
         return f"{self.custom_id}:{self.building_name}"
     
-class Street(BaseModel,CustomIDMixin):
-    street_name=models.CharField(max_length=255)
-    area=models.ForeignKey(Area, verbose_name='area', on_delete=models.CASCADE,related_name='streets')
-    def __str__(self):
-        return f"{self.custom_id}:{self.street_name},{self.area}"
-
-class Landmark(BaseModel,CustomIDMixin):
-    landmark_name=models.CharField(max_length=255)
-    area=models.ForeignKey(Area, verbose_name='area', on_delete=models.CASCADE,related_name='landmarks')
-    def __str__(self):
-        return f"{self.custom_id}:{self.landmark_name},{self.area}"
-
 class Plot(BaseModel, CustomIDMixin):
     plot_no = models.CharField(max_length=255)
-    building = models.ForeignKey(Building, on_delete=models.CASCADE, related_name='plots', null=True, blank=True)
     area = models.ForeignKey(Area, on_delete=models.CASCADE, related_name='plots', null=True, blank=True)
 
 
     class Meta:
         verbose_name = "Plot"
         verbose_name_plural = "Plots"
-        unique_together = ['plot_no', 'area','building']
+        unique_together = ['plot_no', 'area']
 
     def __str__(self):
         return f"{self.custom_id}:{self.plot_no},{self.building},{self.area}"
@@ -164,6 +160,8 @@ class StreetPlotRelationship(BaseModel, CustomIDMixin):
 class LandmarkPlotRelationship(BaseModel, CustomIDMixin):
     landmark = models.ForeignKey(Landmark, on_delete=models.CASCADE, related_name='landmark_plot_relationships')
     plot = models.ForeignKey(Plot, on_delete=models.CASCADE, related_name='landmark_plot_relationships')
+
+
 
 
 # Create your models here.
