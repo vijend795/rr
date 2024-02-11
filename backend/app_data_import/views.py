@@ -1,7 +1,7 @@
 from django.shortcuts import render
 import csv
 from app_data_import.forms import PropertyDataImportForm
-from app_address.models import Address,Country,City,State
+from app_address.models import Address,Country,City,State,Locality,LocalityType
 from django.views.generic import TemplateView
 # Create your views here.
 
@@ -176,6 +176,19 @@ def Upload_property_data(request):
                     
                     
                     i=0
+                  
+                    country_created_count=0
+                    country_updated_count=0
+                    
+                    state_created_count=0
+                    state_updated_count=0
+                    
+                    city_created_count=0
+                    city_updated_count=0
+                    
+                    locality_created_count=0
+                    locality_updated_count=0
+                    print("Data upload from data sheet process initialized .......")
                     for row in reader:
                         if header is not None:
                             for header_name, variable_name in header_mapping.items():
@@ -183,11 +196,19 @@ def Upload_property_data(request):
                                 if index >=0:
                                     data[variable_name]=row[index]
                         
-                        update_or_create_country(data=data)
+                        country_created_count, country_updated_count = update_or_create_country(data=data, country_created_count=country_created_count, country_updated_count=country_updated_count)
+                        state_created_count, state_updated_count = update_or_create_state(data=data, state_created_count=state_created_count, state_updated_count=state_updated_count)
+                        city_created_count, city_updated_count = update_or_create_city(data=data, city_created_count=city_created_count, city_updated_count=city_updated_count)
+                        locality_created_count, locality_updated_count = update_or_create_locality(data=data, locality_created_count=locality_created_count, locality_updated_count=locality_updated_count)
+
                         
                         # if i==0:
                         #     print(data)
                         #     i+=1
+                    print(f"Country data updated from data sheet by import method \nCountry Created:{country_created_count},\nCountry Updated:{country_updated_count}")
+                    print(f"State data updated from data sheet by import method \nState Created:{state_created_count},\nstate Updated:{state_updated_count}")
+                    print(f"City data updated from data sheet by import method \ncity Created:{city_created_count},\ncity Updated:{city_updated_count}")
+                    print("Data upload from data sheet process ended!")
                     return render(request, 'success_url/success_import_property_data.html')
             except Exception as e:
                 # Handle exceptions (e.g., file format errors, database errors)
@@ -212,19 +233,65 @@ class UploadStatus(TemplateView):
         return context
 
 
-def update_or_create_country(data):
-    # print("add and update country data from data sheet import initialise.....")
+def update_or_create_country(data,country_created_count,country_updated_count):
     country =data['country']
     if country:
         try:
             country_data=Country.objects.get(name=data['country'])
-            # print('country already exits')
-        
+            country_updated_count+=1
         except Country.DoesNotExist:
             Country.objects.create(name=data['country'])
-            # print("New Country created :",country)
+            country_created_count+=1
     else:
-        error_count+=1
+       
         print("Country data is not available in data sheet, property ID:",data['property_id'])
+    return country_created_count, country_updated_count
 
-    # print(f"add and update country data from data sheet import ended.....\n\n")
+def update_or_create_state(data,state_created_count,state_updated_count):
+    state =data['state']
+    if state:
+        try:
+            state_data=State.objects.get(name=state)
+            state_updated_count+=1
+        except State.DoesNotExist:
+            State.objects.create(name=state,country=Country.objects.get(name=data['country']))
+            state_created_count+=1
+    else:
+       
+        print("state data is not available in data sheet, property ID:",data['property_id'])
+    return state_created_count, state_updated_count
+
+def update_or_create_city(data,city_created_count,city_updated_count):
+    city =data['city']
+    if city:
+        try:
+            city_data=City.objects.get(name=city)
+            city_updated_count+=1
+        except City.DoesNotExist:
+            City.objects.create(name=city,state=State.objects.get(name=data['state']))
+            city_created_count+=1
+    else:
+       
+        print("city data is not available in data sheet, property ID:",data['property_id'])
+    return city_created_count, city_updated_count
+
+def update_or_create_locality(data,locality_created_count,locality_updated_count):
+    # handle Sector 
+    locality =data['sector']
+    if locality and 'sector' in locality.lower():
+        try:
+            locality_data=Locality.objects.get(name=locality)
+            locality_data.locality_type=LocalityType.objects.get(name="Sector")
+            locality_data.city=City.objects.get(name=data['city'])
+            locality_updated_count+=1
+        except Locality.DoesNotExist:
+            Locality.objects.create(
+                name=locality,
+                locality_type=LocalityType.objects.get(name="Sector"),
+                city=City.objects.get(name=data['city'])
+                )
+            locality_created_count+=1
+    else:
+       
+        print("locality data is not available in data sheet or locality doesn't have Sector init , property ID:",data['property_id'] in data['sector'])
+    return locality_created_count, locality_updated_count

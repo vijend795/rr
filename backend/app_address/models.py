@@ -10,21 +10,21 @@ from django.contrib.contenttypes.models import ContentType
 
 
 class Country(BaseModel,CustomIDMixin):
-    name=models.CharField(max_length=255)
-    code=models.CharField(max_length=50)
+    name=models.CharField(max_length=255,verbose_name="country")
+    code=models.CharField(max_length=50,verbose_name="country code")
     class Meta:
         verbose_name="Country"
-        verbose_name_plural="Countries"
+        verbose_name_plural="Country"
     def __str__(self):
         return f"{self.custom_id}:{self.name} {self.code}"
 
 class State(BaseModel,CustomIDMixin):
-    name=models.CharField(max_length=255)
-    country=models.ForeignKey(Country, verbose_name="state", on_delete=models.CASCADE,related_name='states')
+    name=models.CharField(max_length=255,verbose_name="State")
+    country=models.ForeignKey(Country, verbose_name="country", on_delete=models.CASCADE,related_name='states')
     
     class Meta:
         verbose_name="State"
-        verbose_name_plural="State's"
+        verbose_name_plural="State"
         unique_together = [('name', 'country')]
 
     def __str__(self):
@@ -32,11 +32,11 @@ class State(BaseModel,CustomIDMixin):
 
 
 class City(BaseModel,CustomIDMixin):
-    name=models.CharField(max_length=255)
-    state=models.ForeignKey(State, verbose_name="city", on_delete=models.CASCADE,related_name='cities')
+    name=models.CharField(max_length=255,verbose_name="City")
+    state=models.ForeignKey(State, verbose_name="State", on_delete=models.CASCADE,related_name='cities')
     class Meta:
         verbose_name="City"
-        verbose_name_plural="Cities"
+        verbose_name_plural="City"
         unique_together = [('name', 'state')]
 
     def __str__(self):
@@ -66,6 +66,10 @@ class LocalityType(BaseModel,CustomIDMixin):
     class Meta:
         verbose_name='Locality Type'
         verbose_name_plural='Locality Type'
+    
+    def save(self, *args, **kwargs):
+        self.name = self.name.title()  # Capitalize the first letter
+        super().save(*args, **kwargs)
     def __str__(self):
         return f"{self.id}:{self.name}"
 
