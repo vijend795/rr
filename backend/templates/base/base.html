@@ -1,0 +1,50 @@
+
+{% load static %}
+{% comment %} {% load static tailwind_tags %} {% endcomment %}
+{% comment %} {% load custom_tags %} {% endcomment %}
+
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  {% comment %} {% tailwind_css %} {% endcomment %}
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.4/Chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+
+  <script src="https://www.gstatic.com/charts/loader.js"> </script>
+
+    
+  <title>EduPulse</title>
+  <link rel="stylesheet" href="{% static 'src/styles.css' %}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" />
+</head>
+
+<body class="bg-yellow-50 flex flex-col gap-3">
+
+  <header>
+    <ul>
+        <li> <a href="{% url 'dashboard' %}"> Dashoard </a> </li>
+        <li> <a href="{% url 'upload-property-data' %}"> Load Property data </a> </li>
+        <li> <a href="{% url 'upload-status' %}"> Uplaod Status </a> </li>
+        
+        
+    </ul>
+    
+    
+  </hedaer>
+  
+    
+  <section class="container mx-auto mt-4 flex flex-row gap-4">
+   
+    {% block content %}
+    {% endblock content %}
+  </section>
+ 
+
+</body>
+
+</html>
