@@ -4,6 +4,8 @@ from app_data_import.forms import PropertyDataImportForm
 from app_address.models import Address,Country,City,State,Locality,LocalityType
 from django.views.generic import TemplateView
 # Create your views here.
+from django.core.exceptions import ObjectDoesNotExist
+from app_address.models import Area
 
 
 def Upload_property_data(request):
@@ -196,11 +198,12 @@ def Upload_property_data(request):
                                 if index >=0:
                                     data[variable_name]=row[index]
                         
-                        country_created_count, country_updated_count = update_or_create_country(data=data, country_created_count=country_created_count, country_updated_count=country_updated_count)
-                        state_created_count, state_updated_count = update_or_create_state(data=data, state_created_count=state_created_count, state_updated_count=state_updated_count)
-                        city_created_count, city_updated_count = update_or_create_city(data=data, city_created_count=city_created_count, city_updated_count=city_updated_count)
-                        locality_created_count, locality_updated_count = update_or_create_locality(data=data, locality_created_count=locality_created_count, locality_updated_count=locality_updated_count)
-
+                        # country_created_count, country_updated_count = update_or_create_country(data=data, country_created_count=country_created_count, country_updated_count=country_updated_count)
+                        # state_created_count, state_updated_count = update_or_create_state(data=data, state_created_count=state_created_count, state_updated_count=state_updated_count)
+                        # city_created_count, city_updated_count = update_or_create_city(data=data, city_created_count=city_created_count, city_updated_count=city_updated_count)
+                        # update_or_create_locality(data=data)
+                        
+                        update_or_create_area(data=data)
                         
                         # if i==0:
                         #     print(data)
@@ -275,23 +278,140 @@ def update_or_create_city(data,city_created_count,city_updated_count):
         print("city data is not available in data sheet, property ID:",data['property_id'])
     return city_created_count, city_updated_count
 
-def update_or_create_locality(data,locality_created_count,locality_updated_count):
-    # handle Sector 
-    locality =data['sector']
-    if locality and 'sector' in locality.lower():
+def update_or_create_locality(data):
+    city_name = data['city']
+    state_name = data['state']
+
+    if not city_name or not state_name:
+        print("Error: Creating locality failed. City and state information is not available.")
+        return
+
+    try:
+        city = City.objects.get(name=city_name, state__name=state_name)
+    except City.DoesNotExist:
+        city, created = City.objects.get_or_create(name=city_name, state=State.objects.get(name=state_name))
+        print(f"Error: City '{city_name}' in state '{state_name}' does not exist.")
+        return
+
+    for field_name in ['sector', 'colony', 'area', 'locality_1', 'locality_2']:
+        locality_name = data.get(field_name)
+        if locality_name:
+            # Determine locality type based on the field name or locality name
+            if field_name.capitalize() in ['Sector', 'Colony']:
+                locality_type = field_name.capitalize()
+            elif 'Vihar' in locality_name.capitalize():
+                locality_type = 'Vihar'
+            elif 'Village' in locality_name.capitalize():
+                locality_type = 'Village'
+            else:
+                locality_type = 'Area'
+                
+            try:
+                # Get or create the LocalityType object
+                locality_type_obj, _ = LocalityType.objects.get_or_create(name=locality_type)
+                
+                # Create or update the Locality object
+                locality, created = Locality.objects.get_or_create(name=locality_name, city=city)
+                locality.locality_type=locality_type_obj
+                locality.save()
+            except Exception as e:
+                print(f"Error: {e}")
+
+    print("Locality update or creation completed.")
+
+
+
+def update_or_create_area(data):
+    # print("start saving area object .....")
+    # get locality from all 5 columns
+    sector = data['sector']
+    colony = data['colony']
+    area = data['area']
+    locality_1 = data['locality_1']
+    locality_2 = data['locality_2']
+    pin_code = data['pin_code']
+    city_name = data['city']
+    state_name = data['state']
+    # print(f"Sector:{sector},Colony:{colony},Area:{area},Locality 1:{locality_1}, Locality 2:{locality_2}")
+    # print(f"Sector:{sector},Colony:{colony},Area:{area},Locality 1:{locality_1}, Locality 2:{locality_2},Pin code:{pin_code},City:{city_name},State:{state_name}")
+     # Get or create Locality objects
+    locality_set=set()
+    if city_name and state_name:
+        if sector:
+            try:
+                locality_obj = Locality.objects.get(name=sector, city=City.objects.get(name=city_name,state=State.objects.get(name=state_name)))
+                locality_set.add(locality_obj)
+            except locality_obj.DoesNotExist:
+                print(f"Locality not exits by sector :{sector} ")
+        if colony:
+            try:
+                locality_obj = Locality.objects.get(name=colony, city=City.objects.get(name=city_name,state=State.objects.get(name=state_name)))
+                locality_set.add(locality_obj)
+            except locality_obj.DoesNotExist:
+                print(f"Locality not exits by colony :{colony} ")
+                
+        if area:
+            try:
+                locality_obj = Locality.objects.get(name=area, city=City.objects.get(name=city_name,state=State.objects.get(name=state_name)))
+                locality_set.add(locality_obj)
+            except locality_obj.DoesNotExist:
+                print(f"Locality not exits by area :{area} ")
+        if locality_1:
+            try:
+                locality_obj = Locality.objects.get(name=locality_1, city=City.objects.get(name=city_name,state=State.objects.get(name=state_name)))
+                locality_set.add(locality_obj)
+            except locality_obj.DoesNotExist:
+                print(f"Locality not exits by Locality 1 :{locality_1} ")
+        if locality_2:
+            try:
+                locality_obj = Locality.objects.get(name=locality_2, city=City.objects.get(name=city_name,state=State.objects.get(name=state_name)))
+                locality_set.add(locality_obj)
+            except locality_obj.DoesNotExist:
+                print(f"Locality not exits by locality 2 :{locality_2} ")
+    
+    # if locality_set:
+    #     locality_id_set=set()
+    #     for locality in locality_set:
+    #         locality_id_set.add(locality.custom_id)
+
+        locality_id_set = set(locality.custom_id for locality in locality_set)
         try:
-            locality_data=Locality.objects.get(name=locality)
-            locality_data.locality_type=LocalityType.objects.get(name="Sector")
-            locality_data.city=City.objects.get(name=data['city'])
-            locality_updated_count+=1
-        except Locality.DoesNotExist:
-            Locality.objects.create(
-                name=locality,
-                locality_type=LocalityType.objects.get(name="Sector"),
-                city=City.objects.get(name=data['city'])
-                )
-            locality_created_count+=1
-    else:
-       
-        print("locality data is not available in data sheet or locality doesn't have Sector init , property ID:",data['property_id'] in data['sector'])
-    return locality_created_count, locality_updated_count
+            # # Check if an Area with the same set of localities already exists
+            filter_area = Area.objects.all()
+            
+            for locality_id in locality_id_set:
+                # print(locality_id)
+                filter_area=filter_area.filter(area_locality_relations__locality__locality__custom_id__in=locality_id).distinct()
+                for area in filter_area:
+                    for locality in area.area_locality_relations.all():
+                        print(locality.locality.custom_id)
+                
+            filter_area = filter_area.distinct()
+            
+            # if len(filter_area)>1:
+            #     print("error duplicate area found ",len(filter_area))
+                # for area in filter_area:
+                #     print("filter area:",area)
+    
+            # for area in filter_area:
+            #     print("area id:", area.custom_id)
+
+            # # print("area by filter  :", filter_area)
+            # print("through get method :",Area.objects.get(localities__in=locality_set))
+            # existing_area = Area.objects.get(get_locality_id_set=locality_id_set)
+            # print("area by get method :", existing_area)
+
+        except ObjectDoesNotExist:
+            # print("area not exists creating new ...", pin_code)
+            # Create new Area
+            area_obj = Area.objects.create(pin_code=pin_code)
+            # print(area_obj)
+            # print(area_obj.localities.all())
+
+            if locality_set:
+                area_obj.localities.add(*locality_set)
+
+            # print("Area created:", area_obj)
+            area_obj.save()
+
+   

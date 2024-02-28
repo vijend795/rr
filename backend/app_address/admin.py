@@ -10,7 +10,7 @@ from django.db import models
 # Register your models here.
 
 
-from app_address.models import Address,City,State,Country,Locality,Plot,Building,LocalityType, Area, AreaLocalityRelationship,Street,Landmark,StreetPlotRelationship, LandmarkPlotRelationship,Unit,Floor,Tower,PlotBuildingRelationship,FloorPlotRelationship,UnitFloorRelationship,FloorTowerRelationship,TowerBuildingRelationship,StreetBuildingRelationship,LandmarkBuildingRelationship
+from app_address.models import Address,City,State,Country,Locality,Plot,Building,LocalityType, Area,AreaLocality, Street,Landmark,StreetPlotRelationship, LandmarkPlotRelationship,Unit,Floor,Tower,PlotBuildingRelationship,FloorPlotRelationship,UnitFloorRelationship,FloorTowerRelationship,TowerBuildingRelationship,StreetBuildingRelationship,LandmarkBuildingRelationship
 
 # Inline 
 
@@ -38,7 +38,9 @@ class LandmarkBuildingRelationshipInline(admin.TabularInline):
     model=LandmarkBuildingRelationship
     extra=1
     
-    
+class AreaLocalityInline(admin.TabularInline):
+    model = AreaLocality
+    extra = 1 
     
 class PlotInline(admin.TabularInline):
     model=Plot
@@ -56,9 +58,7 @@ class LocalityInline(admin.TabularInline):
     model=Locality
     extra=1
 
-class AreaLocalityRelationshipInline(admin.TabularInline):
-    model = AreaLocalityRelationship
-    extra=1
+
     
 class StreetPlotRelationshipInline(admin.TabularInline):
     model = StreetPlotRelationship
@@ -110,17 +110,22 @@ class LocalityAdmin(admin.ModelAdmin):
     model=Locality
     list_display=('custom_id','locality_type','sub_locality_name','name', 'tehsil','district','city')
 
-
+class AreaLocalityAdmin(admin.ModelAdmin):
+    model=AreaLocality
+    list_display=('custom_id','area','localities')
+    
 class AreaAdmin(admin.ModelAdmin):
-    model=AreaLocalityRelationship
+    model=Area
     list_display=('custom_id','pin_code','display_localities')
-    inlines=[AreaLocalityRelationshipInline,PlotInline]
+    inlines=[AreaLocalityInline,PlotInline]
 
     def display_localities(self, obj):
-        localities = AreaLocalityRelationship.objects.filter(area=obj).order_by('-locality')
+        localities = obj.localities.all()
+        
         if localities:
-            return mark_safe("<br>".join(f"{relation.locality.locality_type} - {relation.locality}" for relation in localities))
+            return mark_safe("<br>".join(f"{locality.locality_type} - {locality.name}" for locality in localities))
         return ""
+    
     display_localities.short_description = "Localities"
     
 class StreetAdmin(admin.ModelAdmin):

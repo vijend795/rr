@@ -78,7 +78,7 @@ class Locality(BaseModel,CustomIDMixin):
     name=models.CharField( max_length=255, verbose_name='Locality Name')
     # sub_locality will handle block, sector part 1 -2 , etc 
     sub_locality_name=models.CharField( max_length=255, verbose_name='Sub Locality Name',null=True,blank=True)
-    locality_type=models.ForeignKey(LocalityType, verbose_name='locality Type', on_delete=models.CASCADE, related_name='localities')
+    locality_type=models.ForeignKey(LocalityType, verbose_name='locality Type', on_delete=models.CASCADE, related_name='localities',null=True,blank=True)
     city=models.ForeignKey(City, verbose_name="city", on_delete=models.CASCADE,related_name='localities')
     district=models.ForeignKey(District, verbose_name='district', on_delete=models.CASCADE, related_name='localities',null=True, blank=True)
     tehsil=models.ForeignKey(Tehsil, verbose_name='tehsil', on_delete=models.CASCADE, related_name='localities',null=True, blank=True)
@@ -90,8 +90,11 @@ class Locality(BaseModel,CustomIDMixin):
         unique_together = [('locality_type','sub_locality_name','name', 'city')]
 
     def __str__(self):
-     
-        return f"{self.custom_id}:{self.locality_type}:{self.sub_locality_name}, {self.name}, {self.city}"
+        if self.sub_locality_name:
+            
+            return f"{self.custom_id}:{self.locality_type}:{self.sub_locality_name}, {self.name}, {self.city}"
+        else:
+            return f"{self.custom_id}:{self.locality_type}:{self.name}, {self.city}"
 
 
 # area can have multiple unique locality adn create a area for address 
@@ -99,32 +102,34 @@ class Locality(BaseModel,CustomIDMixin):
 
 
 class Area(BaseModel,CustomIDMixin):
-    pin_code=models.CharField( max_length=255,null=True, blank=True)
+    pin_code = models.CharField(max_length=255, null=True, blank=True)
+    localities = models.ManyToManyField('Locality', through='AreaLocality', verbose_name='localities')
 
     class Meta:
         verbose_name='Area'
         verbose_name_plural='Area'
+        
+    def get_locality_id_set(self):
+        id_set=set()
+        for locality in self.area_locality_relations.all():
+            id_set.add(locality.locality.custom_id)
+        
+        return id_set
+
     def __str__(self):
-        localities = AreaLocalityRelationship.objects.filter(area=self)
-        locality_parts = []
-        for relation in localities:
-            locality_full_name = ""
-            if relation.locality.sub_locality_name:
-                locality_full_name += f"{relation.locality.sub_locality_name}-"
-            locality_full_name += relation.locality.name
-            locality_parts.append(locality_full_name)
+        
+        locality_info = ", ".join([f"{area_loc.locality.locality_type}: {area_loc.locality.sub_locality_name}, {area_loc.locality.name}, {area_loc.locality.city.name}, {area_loc.locality.city.state.name}" for area_loc in self.area_locality_relations.all()])
+        locality_id= ", ".join([f"{area_loc.locality.custom_id}" for area_loc in self.area_locality_relations.all()])
+        return f"Area ID: {self.custom_id},  Localities: {locality_info}, Pin Code: {self.pin_code}, ID:{locality_id}"
+        
 
-        locality_names_str = ", ".join(locality_parts)
-       
-        city_name = localities.first().locality.city if localities else "Unknown City"
-     
-        return  f'{self.custom_id}:{locality_names_str}, {city_name},{self.pin_code} '
 
-# now area can have multiple inline with locality and locality type   
-class AreaLocalityRelationship(BaseModel,CustomIDMixin):
-    area = models.ForeignKey(Area, on_delete=models.CASCADE)
-    # locality_type = models.ForeignKey(LocalityType, on_delete=models.CASCADE) # locality_type is part of Locality model
-    locality = models.ForeignKey(Locality, on_delete=models.CASCADE) 
+class AreaLocality(models.Model):
+    area = models.ForeignKey(Area, on_delete=models.CASCADE,related_name='area_locality_relations')
+    locality = models.ForeignKey(Locality, on_delete=models.CASCADE,related_name='area_locality_relations')
+
+    class Meta:
+        unique_together = ('area', 'locality')
     
 class Street(BaseModel,CustomIDMixin):
     name=models.CharField(max_length=255)
