@@ -1,17 +1,18 @@
 from django.shortcuts import render
 import csv
 from app_data_import.forms import PropertyDataImportForm
-from app_address.models import Address,Country,City,State,Locality,LocalityType
+from app_address.models import Country,City,State,Locality,LocalityType,Block,Plot, Landmark, Street,Building, Tower, Floor, Unit, FloorPlotRelationship, FloorTowerRelationship, UnitFloorRelationship, PlotBuildingRelationship, StreetBuildingRelationship,StreetPlotRelationship, TowerBuildingRelationship,LandmarkBuildingRelationship, LandmarkPlotRelationship
 from django.views.generic import TemplateView
 # Create your views here.
 from django.core.exceptions import ObjectDoesNotExist
 from app_address.models import Area
-
+from django.db.models import Q,Count
 
 def Upload_property_data(request):
     form=PropertyDataImportForm()
     
     if request.method=='POST':
+        
         form =PropertyDataImportForm(request.POST,request.FILES)
         if form.is_valid():
             csv_file=request.FILES['csv_file']
@@ -190,6 +191,10 @@ def Upload_property_data(request):
                     
                     locality_created_count=0
                     locality_updated_count=0
+                    
+                    not_found=0
+                    found_one=0
+                    found_many=0
                     print("Data upload from data sheet process initialized .......")
                     for row in reader:
                         if header is not None:
@@ -203,7 +208,15 @@ def Upload_property_data(request):
                         # city_created_count, city_updated_count = update_or_create_city(data=data, city_created_count=city_created_count, city_updated_count=city_updated_count)
                         # update_or_create_locality(data=data)
                         
-                        update_or_create_area(data=data)
+                        # not_found,found_one,found_many=check_area(data=data,not_found=not_found,found_one=found_one,found_many=found_many)
+                       
+                        # update_or_create_block(data=data)
+                        
+                        area_object=update_or_create_area(data=data)
+                        
+                        # for creating Plot, Building, block etc
+                        update_or_create_other_plot_object(data=data, area_obj=area_object)
+                        
                         
                         # if i==0:
                         #     print(data)
@@ -211,6 +224,7 @@ def Upload_property_data(request):
                     print(f"Country data updated from data sheet by import method \nCountry Created:{country_created_count},\nCountry Updated:{country_updated_count}")
                     print(f"State data updated from data sheet by import method \nState Created:{state_created_count},\nstate Updated:{state_updated_count}")
                     print(f"City data updated from data sheet by import method \ncity Created:{city_created_count},\ncity Updated:{city_updated_count}")
+                    print(f"Area check update :\n Not found:{not_found},\n Found One :{found_one},\n Found Many :{found_many}")
                     print("Data upload from data sheet process ended!")
                     return render(request, 'success_url/success_import_property_data.html')
             except Exception as e:
@@ -321,9 +335,8 @@ def update_or_create_locality(data):
 
 
 
-def update_or_create_area(data):
-    # print("start saving area object .....")
-    # get locality from all 5 columns
+def update_or_create_block(data):
+    block=data['block']
     sector = data['sector']
     colony = data['colony']
     area = data['area']
@@ -332,9 +345,145 @@ def update_or_create_area(data):
     pin_code = data['pin_code']
     city_name = data['city']
     state_name = data['state']
-    # print(f"Sector:{sector},Colony:{colony},Area:{area},Locality 1:{locality_1}, Locality 2:{locality_2}")
-    # print(f"Sector:{sector},Colony:{colony},Area:{area},Locality 1:{locality_1}, Locality 2:{locality_2},Pin code:{pin_code},City:{city_name},State:{state_name}")
-     # Get or create Locality objects
+    
+    locality_set=set()
+    if block:
+        if city_name and state_name:
+            if sector:
+                try:
+                    locality_obj = Locality.objects.get(name=sector, city=City.objects.get(name=city_name,state=State.objects.get(name=state_name)))
+                    locality_set.add(locality_obj)
+                except locality_obj.DoesNotExist:
+                    print(f"Locality not exits by sector :{sector} ")
+            if colony:
+                try:
+                    locality_obj = Locality.objects.get(name=colony, city=City.objects.get(name=city_name,state=State.objects.get(name=state_name)))
+                    locality_set.add(locality_obj)
+                except locality_obj.DoesNotExist:
+                    print(f"Locality not exits by colony :{colony} ")
+                    
+            if area:
+                try:
+                    locality_obj = Locality.objects.get(name=area, city=City.objects.get(name=city_name,state=State.objects.get(name=state_name)))
+                    locality_set.add(locality_obj)
+                except locality_obj.DoesNotExist:
+                    print(f"Locality not exits by area :{area} ")
+            if locality_1:
+                try:
+                    locality_obj = Locality.objects.get(name=locality_1, city=City.objects.get(name=city_name,state=State.objects.get(name=state_name)))
+                    locality_set.add(locality_obj)
+                except locality_obj.DoesNotExist:
+                    print(f"Locality not exits by Locality 1 :{locality_1} ")
+            if locality_2:
+                try:
+                    locality_obj = Locality.objects.get(name=locality_2, city=City.objects.get(name=city_name,state=State.objects.get(name=state_name)))
+                    locality_set.add(locality_obj)
+                except locality_obj.DoesNotExist:
+                    print(f"Locality not exits by locality 2 :{locality_2} ")
+                    
+        if locality_set:
+            all_localities_name=set(locality.name for locality in locality_set)
+            if colony and colony != 'South Delhi':
+                locality_name=colony
+                try:
+                    search_block = Block.objects.get(name=block, locality=Locality.objects.get(name=locality_name,city=City.objects.get(name=city_name,state=State.objects.get(name=state_name))))
+                except Block.DoesNotExist:
+                    block, created = Block.objects.get_or_create(name=block,
+                                                                 locality=Locality.objects.get(name=locality_name,city=City.objects.get(name=city_name,state=State.objects.get(name=state_name))),
+                                                                 remark=all_localities_name
+                                                                 )
+            elif locality_1 and locality_1 != "South Delhi":
+                locality_name=locality_1
+                try:
+                    search_block=Block.objects.get(name=block, locality=Locality.objects.get(name=locality_name,city=City.objects.get(name=city_name,state=State.objects.get(name=state_name))))
+                except Block.DoesNotExist:
+                    block, created = Block.objects.get_or_create(name=block,
+                                                                 locality=Locality.objects.get(name=locality_name,city=City.objects.get(name=city_name,state=State.objects.get(name=state_name))),
+                                                                 remark=all_localities_name
+                                                                 )
+            elif area and area != "Udyog Vihar" and area != 'South Delhi' and area != 'Lajpat Nagar' and area != 'Devilal Colony':
+                locality_name=area
+                try:
+                    search_block=Block.objects.get(name=block, locality=Locality.objects.get(name=locality_name,city=City.objects.get(name=city_name,state=State.objects.get(name=state_name))))
+                except Block.DoesNotExist:
+                    block, created = Block.objects.get_or_create(name=block,
+                                                                 locality=Locality.objects.get(name=locality_name,city=City.objects.get(name=city_name,state=State.objects.get(name=state_name))),
+                                                                 remark=all_localities_name
+                                                                 )
+            elif locality_2 :
+                locality_name=locality_2
+                try:
+                    search_block=Block.objects.get(name=block, locality=Locality.objects.get(name=locality_name,city=City.objects.get(name=city_name,state=State.objects.get(name=state_name))))
+                except Block.DoesNotExist:
+                    block, created = Block.objects.get_or_create(name=block,
+                                                                 locality=Locality.objects.get(name=locality_name,city=City.objects.get(name=city_name,state=State.objects.get(name=state_name))),
+                                                                 remark=all_localities_name
+                                                                 )
+            elif sector :
+                locality_name=sector
+                try:
+                    search_block=Block.objects.get(name=block, locality=Locality.objects.get(name=locality_name,city=City.objects.get(name=city_name,state=State.objects.get(name=state_name))))
+                except Block.DoesNotExist:
+                    block, created = Block.objects.get_or_create(name=block,
+                                                                 locality=Locality.objects.get(name=locality_name,city=City.objects.get(name=city_name,state=State.objects.get(name=state_name))),
+                                                                 remark=all_localities_name
+                                                                 )
+            else:
+                print("Block has no locality to match with data row id ",data['property_id'])
+                
+      
+            
+
+
+# def check_area(data,not_found,found_one,found_many):
+def update_or_create_area(data):
+    block=data['block']
+    sector = data['sector']
+    colony = data['colony']
+    area = data['area']
+    locality_1 = data['locality_1']
+    locality_2 = data['locality_2']
+    pin_code = data['pin_code']
+    city_name = data['city']
+    state_name = data['state']
+    locality_set=set()
+    area_object=None
+    if  city_name and state_name:
+        if sector:
+            try:
+                locality_obj = Locality.objects.get(name=sector, city=City.objects.get(name=city_name,state=State.objects.get(name=state_name)))
+                locality_set.add(locality_obj)
+            except locality_obj.DoesNotExist:
+                print(f"Locality not exits by sector :{sector} ")
+        if colony:
+            try:
+                locality_obj = Locality.objects.get(name=colony, city=City.objects.get(name=city_name,state=State.objects.get(name=state_name)))
+                locality_set.add(locality_obj)
+            except locality_obj.DoesNotExist:
+                print(f"Locality not exits by colony :{colony} ")
+                
+        if area:
+            try:
+                locality_obj = Locality.objects.get(name=area, city=City.objects.get(name=city_name,state=State.objects.get(name=state_name)))
+                locality_set.add(locality_obj)
+            except locality_obj.DoesNotExist:
+                print(f"Locality not exits by area :{area} ")
+        if locality_1:
+            try:
+                locality_obj = Locality.objects.get(name=locality_1, city=City.objects.get(name=city_name,state=State.objects.get(name=state_name)))
+                locality_set.add(locality_obj)
+            except locality_obj.DoesNotExist:
+                print(f"Locality not exits by Locality 1 :{locality_1} ")
+        if locality_2:
+            try:
+                locality_obj = Locality.objects.get(name=locality_2, city=City.objects.get(name=city_name,state=State.objects.get(name=state_name)))
+                locality_set.add(locality_obj)
+            except locality_obj.DoesNotExist:
+                print(f"Locality not exits by locality 2 :{locality_2} ")
+        
+                
+                
+                
     locality_set=set()
     if city_name and state_name:
         if sector:
@@ -368,50 +517,256 @@ def update_or_create_area(data):
                 locality_set.add(locality_obj)
             except locality_obj.DoesNotExist:
                 print(f"Locality not exits by locality 2 :{locality_2} ")
-    
-    # if locality_set:
-    #     locality_id_set=set()
-    #     for locality in locality_set:
-    #         locality_id_set.add(locality.custom_id)
-
-        locality_id_set = set(locality.custom_id for locality in locality_set)
-        try:
-            # # Check if an Area with the same set of localities already exists
-            filter_area = Area.objects.all()
-            
-            for locality_id in locality_id_set:
-                # print(locality_id)
-                filter_area=filter_area.filter(area_locality_relations__locality__locality__custom_id__in=locality_id).distinct()
-                for area in filter_area:
-                    for locality in area.area_locality_relations.all():
-                        print(locality.locality.custom_id)
                 
-            filter_area = filter_area.distinct()
-            
-            # if len(filter_area)>1:
-            #     print("error duplicate area found ",len(filter_area))
-                # for area in filter_area:
-                #     print("filter area:",area)
+    if locality_set:
+      
+        locality_ids = [locality.id for locality in locality_set]
+        search_area=Area.objects.all()
+        
+        # search_area = search_area.filter(localities__in=locality_ids)
+        
+        search_area=search_area.annotate(num_localities=Count('localities')).filter(num_localities=len(locality_ids))
+        
+        final_search_result = []
+
+        if search_area:
+            for area in search_area:
+                search_locality_ids = set(locality.id for locality in area.localities.all())
+                if set(locality_ids) == search_locality_ids:
+                    final_search_result.append(area)
+                
+        # find block object
+        block_obj=None 
     
-            # for area in filter_area:
-            #     print("area id:", area.custom_id)
+        if block and city_name and state_name:  # Check if block, city_name, and state_name are provided
+            locality_name=None
+            block=data['block']
+            sector_name = data['sector']
+            colony_name = data['colony']
+            area_name = data['area']
+            locality_1_name = data['locality_1']
+            locality_2_name = data['locality_2']
+            pin_code = data['pin_code']
+            city_name = data['city']
+            state_name = data['state']
+            # Determine the locality_name based on the conditions
+            if colony_name and colony_name != 'South Delhi':
+                locality_name = colony_name
+            elif locality_1_name and locality_1_name != "South Delhi":
+                locality_name = locality_1_name
+            elif area_name and area_name not in ["Udyog Vihar", 'South Delhi', 'Lajpat Nagar', 'Devilal Colony']:
+                locality_name = area_name
+            elif locality_2_name:
+                locality_name = locality_2_name
+            elif sector_name:
+                locality_name = sector_name
 
-            # # print("area by filter  :", filter_area)
-            # print("through get method :",Area.objects.get(localities__in=locality_set))
-            # existing_area = Area.objects.get(get_locality_id_set=locality_id_set)
-            # print("area by get method :", existing_area)
+            # Retrieve the block object
+            print("locality Name :",locality_name)
+            if locality_name:  # Ensure that locality_name is not None
+                try:
+                    # Query for the block object using locality_name, city_name, and state_name
+                    try:
+                        locality_obj=Locality.objects.get(name=locality_name,city=City.objects.get(name=city_name,state=State.objects.get(name=state_name)))
+                    except locality_obj.DoesNotExist:
+                        print("Locality not exits for block obj :",locality_name)
+                    # if locality Obj exits then find block obj
+                    block_obj = Block.objects.get(name=block, locality=locality_obj )
+                except Block.DoesNotExist:
+                    print(f"Block matching query does not exist for block: {block}, locality: {locality_name}, city: {city_name}, state: {state_name}")
 
-        except ObjectDoesNotExist:
-            # print("area not exists creating new ...", pin_code)
-            # Create new Area
+      
+        if len(final_search_result)==0:
             area_obj = Area.objects.create(pin_code=pin_code)
-            # print(area_obj)
-            # print(area_obj.localities.all())
-
-            if locality_set:
-                area_obj.localities.add(*locality_set)
-
-            # print("Area created:", area_obj)
-            area_obj.save()
-
+            area_obj.localities.add(*locality_set)
+            if block_obj is not None:
+                area_obj.block=block_obj
+            print("Area created:", area_obj)
+            area_object=area_obj
+            # print("error cant found area for locality :",locality_set)
+            
+        
+            
+        if final_search_result:
+            if len(final_search_result)==1:
+                for area in final_search_result:
+                    if block_obj is not None:
+                        area.block=block_obj
+                        area.save()
+                        print("Block updated in area object")
+                        area_object=area
+                # print("Area matched , write update code below if you want to update ")
+                
+            if len(final_search_result)>1:
+                multiple_search_area_locality_ids_group=set()
+                for area in final_search_result:
+                    locality_ids=tuple(locality.id for locality in area.localities.all())
+                    multiple_search_area_locality_ids_group.add(locality_ids)
+                
+                print("Error more then 2 area found for locality:",locality_ids)
+                print("Search area :",multiple_search_area_locality_ids_group)
+                
+    return area_object          
+                
+    
+    
    
+def update_or_create_other_plot_object(data, area_obj):
+    plot_no = data['plot_no']
+    building = data['building_name']
+    tower = data['wing']
+    unit_no = data['unit_no']
+    floor = data['floor']
+    landmark = data['landmark']
+    street = data['road']
+    
+    plot_obj = None
+    building_obj = None
+    landmark_obj = None
+    street_obj = None
+    floor_obj = None
+    tower_obj = None
+    unit_obj=None
+
+    if area_obj and plot_no:
+        plot_obj, created = Plot.objects.get_or_create(plot_no=plot_no, area=area_obj)
+        if created:
+            print(f"Plot object created with plot_no: {plot_no} and area: {area_obj}")
+        else:
+            print(f"Plot object already exists with plot_no: {plot_no} and area: {area_obj}")
+
+    if area_obj and building:
+        building_obj, created = Building.objects.get_or_create(name=building, area=area_obj)
+        if created:
+            print(f"Building object created with name: {building} and area: {area_obj}")
+        else:
+            print(f"Building object already exists with name: {building} and area: {area_obj}")
+
+    if area_obj and landmark:
+        landmark_obj, created = Landmark.objects.get_or_create(name=landmark, area=area_obj)
+        if created:
+            print(f"Landmark object created with name: {landmark} and area: {area_obj}")
+        else:
+            print(f"Landmark object already exists with name: {landmark} and area: {area_obj}")
+
+    if area_obj and street:
+        street_obj, created = Street.objects.get_or_create(name=street, area=area_obj)
+        if created:
+            print(f"Street object created with name: {street} and area: {area_obj}")
+        else:
+            print(f"Street object already exists with name: {street} and area: {area_obj}")
+
+    if floor:
+        floor_obj, created = Floor.objects.get_or_create(name=floor)
+        if created:
+            print(f"Floor object created with name: {floor}")
+        else:
+            print(f"Floor object already exists with name: {floor}")
+
+    if tower:
+        tower_obj, created = Tower.objects.get_or_create(name=tower)
+        if created:
+            print(f"Tower object created with name: {tower}")
+        else:
+            print(f"Tower object already exists with name: {tower}")
+            
+    if unit_no:
+        unit_obj, created = Unit.objects.get_or_create(name=unit_no)
+        if created:
+            print(f"Unit object created with name: {unit_no}")
+        else:
+            print(f"Unit object already exists with name: {unit_no}")
+
+    if floor_obj and plot_obj:
+        floor_plot_relationship_obj, created = FloorPlotRelationship.objects.get_or_create(
+            floor=floor_obj,
+            plot=plot_obj
+        )
+        if created:
+            print(f"FloorPlotRelationship object created for floor: {floor_obj} and plot: {plot_obj}")
+        else:
+            print(f"FloorPlotRelationship object already exists for floor: {floor_obj} and plot: {plot_obj}")
+    
+    if floor_obj and tower_obj:
+        print(f"floor {floor_obj} and tower {tower_obj}")
+        floor_tower_relationship_obj, created = FloorTowerRelationship.objects.get_or_create(
+            floor=floor_obj,
+            tower=tower_obj
+        )
+        if created:
+            print(f"FloorTowerRelationship object created for floor: {floor_obj} and tower: {tower_obj}")
+        else:
+            print(f"FloorTowerRelationship object already exists for floor: {floor_obj} and tower: {tower_obj}")
+    
+    if plot_obj and building_obj:
+        plot_building_relationship_obj, created = PlotBuildingRelationship.objects.get_or_create(
+            plot=plot_obj,
+            building=building_obj
+        )
+        if created:
+            print(f"PlotBuildingRelationship object created for plot: {plot_obj} and building: {building_obj}")
+        else:
+            print(f"PlotBuildingRelationship object already exists for plot: {plot_obj} and building: {building_obj}")
+    
+    if tower_obj and building_obj:
+        tower_building_relationship_obj, created = TowerBuildingRelationship.objects.get_or_create(
+            tower=tower_obj,
+            building=building_obj
+        )
+        if created:
+            print(f"TowerBuildingRelationship object created for tower: {tower_obj} and building: {building_obj}")
+        else:
+            print(f"TowerBuildingRelationship object already exists for tower: {tower_obj} and building: {building_obj}")
+    
+    if landmark_obj and building_obj:
+        landmark_building_relationship_obj, created = LandmarkBuildingRelationship.objects.get_or_create(
+            landmark=landmark_obj,
+            building=building_obj
+        )
+        if created:
+            print(f"LandmarkBuildingRelationship object created for landmark: {landmark_obj} and building: {building_obj}")
+        else:
+            print(f"LandmarkBuildingRelationship object already exists for landmark: {landmark_obj} and building: {building_obj}")
+    
+    if landmark_obj and plot_obj:
+        landmark_plot_relationship_obj, created = LandmarkPlotRelationship.objects.get_or_create(
+            landmark=landmark_obj,
+            plot=plot_obj
+        )
+        if created:
+            print(f"LandmarkPlotRelationship object created for landmark: {landmark_obj} and plot: {plot_obj}")
+        else:
+            print(f"LandmarkPlotRelationship object already exists for landmark: {landmark_obj} and plot: {plot_obj}")
+    
+    if street_obj and plot_obj:
+        street_plot_relationship_obj, created = StreetPlotRelationship.objects.get_or_create(
+            street=street_obj,
+            plot=plot_obj
+        )
+        if created:
+            print(f"StreetPlotRelationship object created for street: {street_obj} and plot: {plot_obj}")
+        else:
+            print(f"StreetPlotRelationship object already exists for street: {street_obj} and plot: {plot_obj}")
+    
+    if street_obj and building_obj:
+        street_plot_relationship_obj, created = StreetBuildingRelationship.objects.get_or_create(
+            street=street_obj,
+            building=building_obj
+        )
+        if created:
+            print(f"StreetBuildingRelationship object created for street: {street_obj} and building: {building_obj}")
+        else:
+            print(f"StreetBuildingRelationship object already exists for street: {street_obj} and building: {building_obj}")
+
+    print(f"floor :{floor}, unit:{unit_no} and floor obj: {floor_obj} , unit object : {unit_obj}")
+    if floor_obj and unit_obj:
+        
+        unit_floor_relationship_obj, created = UnitFloorRelationship.objects.get_or_create(
+            floor=floor_obj,
+            unit=unit_obj
+        )
+        if created:
+            print(f"UnitFloorRelationship object created for floor: {floor_obj} and unit: {unit_obj}")
+        else:
+            print(f"UnitFloorRelationship object already exists for floor: {floor_obj} and unit: {unit_obj}")
+  

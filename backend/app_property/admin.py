@@ -1,12 +1,9 @@
 from django.contrib import admin
-from app_property.models import Property ,PropertyAddressRelationship
+from app_property.models import Property 
 # Register your models here.
 
 
-# inlines 
-class PropertyAddressRelationshipInline(admin.TabularInline):
-    model=PropertyAddressRelationship
-    extra=1
+
 
 
 
@@ -15,8 +12,8 @@ class PropertyAddressRelationshipInline(admin.TabularInline):
 
 class PropertyAdmin(admin.ModelAdmin):
     model=Property
-    list_display=('custom_id','area_in_sq_ft','property_for','property_use','property_type')
-    inlines=[PropertyAddressRelationshipInline]
+    list_display=('custom_id',)
+ 
 
 
 admin.site.register(Property,PropertyAdmin)

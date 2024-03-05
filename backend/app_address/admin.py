@@ -10,7 +10,7 @@ from django.db import models
 # Register your models here.
 
 
-from app_address.models import Address,City,State,Country,Locality,Plot,Building,LocalityType, Area,AreaLocality, Street,Landmark,StreetPlotRelationship, LandmarkPlotRelationship,Unit,Floor,Tower,PlotBuildingRelationship,FloorPlotRelationship,UnitFloorRelationship,FloorTowerRelationship,TowerBuildingRelationship,StreetBuildingRelationship,LandmarkBuildingRelationship
+from app_address.models import City,State,Country,Locality,Plot,Building,LocalityType, Area,AreaLocality, Street,Landmark,StreetPlotRelationship, LandmarkPlotRelationship,Unit,Floor,Tower,PlotBuildingRelationship,FloorPlotRelationship,UnitFloorRelationship,FloorTowerRelationship,TowerBuildingRelationship,StreetBuildingRelationship,LandmarkBuildingRelationship,Block
 
 # Inline 
 
@@ -109,28 +109,34 @@ class LocalityTypeAdmin(admin.ModelAdmin):
 class LocalityAdmin(admin.ModelAdmin):
     model=Locality
     list_display=('custom_id','locality_type','sub_locality_name','name', 'tehsil','district','city')
+    
 
 class AreaLocalityAdmin(admin.ModelAdmin):
     model=AreaLocality
     list_display=('custom_id','area','localities')
     
+class BlockAdmin(admin.ModelAdmin):
+    model=Block
+    list_display=('custom_id','name','locality')
+    
 class AreaAdmin(admin.ModelAdmin):
     model=Area
-    list_display=('custom_id','pin_code','display_localities')
+    list_display=('custom_id','block','display_localities','pin_code')
     inlines=[AreaLocalityInline,PlotInline]
 
     def display_localities(self, obj):
         localities = obj.localities.all()
         
         if localities:
-            return mark_safe("<br>".join(f"{locality.locality_type} - {locality.name}" for locality in localities))
+            # return mark_safe("<br>".join(f"{locality.locality_type} - {locality.name}" for locality in localities))
+            return mark_safe("<br>".join(f"{locality}" for locality in localities))
         return ""
     
     display_localities.short_description = "Localities"
     
 class StreetAdmin(admin.ModelAdmin):
-    list_display=('custom_id','name','get_plot_numbers')   
-    inlines=[StreetPlotRelationshipInline]
+    list_display=('custom_id','name','get_plot_numbers','get_buildings','area')   
+    inlines=[StreetPlotRelationshipInline,StreetBuildingRelationshipInline]
     
     def get_plot_numbers(self, obj):
         plot_numbers = obj.street_plot_relationships.all().order_by('plot__plot_no')
@@ -138,27 +144,46 @@ class StreetAdmin(admin.ModelAdmin):
         if plot_numbers:
             return mark_safe("<br>".join(str(relationship.plot.plot_no) for relationship in plot_numbers))
         return ""
+    def get_buildings(self,obj):
+        buildings=obj.street_building_relationships.all()
+        
+        if buildings:
+            return mark_safe("<br>".join(str(relationship.building.name) for relationship in buildings))
 
+        return ""
 
     get_plot_numbers.short_description = 'Plot Numbers'
+    get_buildings.short_description = 'Buildings '
 
 class LandmarkAdmin(admin.ModelAdmin):
-    list_display=('custom_id','name','get_plot_numbers')  
-    inlines=[LandmarkPlotRelationshipInline] 
+    list_display=('custom_id','name','get_plot_numbers','get_buildings',"area")  
+    inlines=[LandmarkPlotRelationshipInline,LandmarkBuildingRelationshipInline] 
     def get_plot_numbers(self, obj):
         plot_numbers = obj.landmark_plot_relationships.all().order_by('plot__plot_no')
         # return ", ".join(str(relationship.plot.plot_no) for relationship in plot_numbers)
         if plot_numbers:
             return mark_safe("<br>".join(str(relationship.plot.plot_no) for relationship in plot_numbers))
         return ""
+    
+    def get_buildings(self,obj):
+        buildings=obj.landmark_building_relationships.all()
+        
+        if buildings:
+            return mark_safe("<br>".join(str(relationship.building.name) for relationship in buildings))
+
+        return ""
 
     get_plot_numbers.short_description = 'Plot Numbers'
+    get_buildings.short_description = 'Buildings'
 
 
 
 class PlotAdmin(admin.ModelAdmin):
     list_display=('custom_id','plot_no','area','get_all_streets','get_all_landmark')
     inlines=[StreetPlotRelationshipInline,LandmarkPlotRelationshipInline]
+    list_filter=('area__localities__city__state','area',)
+    search_fields = ['custom_id', 'plot_no', 'area__localities__name', 'area__localities__sub_locality_name']
+
 
     def get_all_streets(self, obj):
         street_relationships = obj.street_plot_relationships.all().order_by('-street__name')
@@ -181,14 +206,72 @@ class PlotAdmin(admin.ModelAdmin):
 
 class BuildingAdmin(admin.ModelAdmin):
     model=Building
-    list_display=('custom_id','name')
-    inlines=[PlotBuildingRelationshipInline,TowerBuildingRelationshipInline]
+    list_display=('custom_id','name','get_all_towers','get_all_plots','get_all_floor','area')
+    inlines=[PlotBuildingRelationshipInline,TowerBuildingRelationshipInline,StreetBuildingRelationshipInline,LandmarkBuildingRelationshipInline]
+    
+    def get_all_towers(self,obj):
+        towers=obj.tower_building_relationships.all()
+        if towers:
+            return mark_safe("<br>".join(str(relationship.tower.name)for relationship in towers))
+        else:
+            return ""
+        
+    def get_all_plots(self,obj):
+        plots=obj.plot_building_relationships.all()
+        if plots:
+            return mark_safe("<br>".join(str(relationship.plot.plot_no)for relationship in plots))
+        else:
+            return ""
+        
+    def get_all_floor(self,obj):
+        towers = obj.tower_building_relationships.all()
+        floors_set = set()  # Initialize an empty set to store unique floors
+        
+        for tower in towers:
+            floors = tower.tower.floor_tower_relationships.all()
+            all_floor = f"<br>Tower: {tower.tower.name} <br>"  # Initialize all_floor with tower info
+            
+            if floors:
+                all_floor += "<br>".join(f"{floor.floor.name}  " for floor in floors)
+                # all_floor += "<br>".join(f"{floor.floor.name} ({floor.tower.name})<br>{'<br>'.join(relation.building.name for relation in floor.tower.tower_building_relationships.all() if obj.name == relation.building.name)}" for floor in floors)
+
+                floors_set.add(all_floor)
+            else:
+                floors_set.add("No floors")  # If no floors, add a message to indicate that
+            
+        if floors_set:
+            return mark_safe("<br>".join(floors_set))
+        else:
+            return ""
+       
+    
+    get_all_plots.short_description="Plot"
+    get_all_towers.short_description="Tower"
+    get_all_floor.short_description="Floor"
     
 class TowerAdmin(admin.ModelAdmin):
     model=Tower
-    list_display=('custom_id','name')
+    list_display=('custom_id','name','block','get_all_buildings','get_all_floor')
     inlines=[TowerBuildingRelationshipInline,FloorTowerRelationshipInline]
+    list_filter=('tower_building_relationships__building','name',)
+    
+    def get_all_buildings(self,obj):
+        buildings=obj.tower_building_relationships.all()
+        if buildings:
+            return mark_safe("<br>".join((str(relationship.building.name) for relationship in buildings)))
+        return ""
+    
+    def get_all_floor(self,obj):
+        floors=obj.floor_tower_relationships.all()
+        if floors:
+            return mark_safe("<br>".join((str(relationship.floor.name) for relationship in floors)))
+        return ""
    
+    
+    get_all_buildings.short_description="Buildings"
+    get_all_floor.short_descriptions="Floors"
+    
+    
 class UnitAdmin(admin.ModelAdmin):
     model=Unit
     list_display=('custom_id','name')
@@ -212,10 +295,11 @@ admin.site.register(City,CityAdmin)
 admin.site.register(Locality,LocalityAdmin)
 
 admin.site.register(LocalityType,LocalityTypeAdmin)
+admin.site.register(Block,BlockAdmin)
 admin.site.register(Area,AreaAdmin)
 admin.site.register(Plot,PlotAdmin)
 admin.site.register(Building,BuildingAdmin)
-admin.site.register(Address,AddressAdmin)
+
 admin.site.register(Street,StreetAdmin)
 admin.site.register(Landmark,LandmarkAdmin)
 admin.site.register(Floor,FloorAdmin)

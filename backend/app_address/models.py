@@ -6,6 +6,8 @@ from django.core.exceptions import ValidationError
 
 from django.contrib.contenttypes.fields import GenericForeignKey, GenericRelation
 from django.contrib.contenttypes.models import ContentType
+from django.db.models.signals import post_migrate
+from django.dispatch import receiver
 
 
 
@@ -16,7 +18,8 @@ class Country(BaseModel,CustomIDMixin):
         verbose_name="Country"
         verbose_name_plural="Country"
     def __str__(self):
-        return f"{self.custom_id}:{self.name} {self.code}"
+        # return f"{self.custom_id}:{self.name} {self.code}"
+        return f"{self.name} "
 
 class State(BaseModel,CustomIDMixin):
     name=models.CharField(max_length=255,verbose_name="State")
@@ -28,7 +31,8 @@ class State(BaseModel,CustomIDMixin):
         unique_together = [('name', 'country')]
 
     def __str__(self):
-        return f"{self.custom_id}:{self.name} {self.country}"
+        # return f"{self.custom_id}:{self.name} {self.country}"
+        return f"{self.name}, {self.country}"
 
 
 class City(BaseModel,CustomIDMixin):
@@ -40,7 +44,8 @@ class City(BaseModel,CustomIDMixin):
         unique_together = [('name', 'state')]
 
     def __str__(self):
-        return f"{self.custom_id}:{self.name} {self.state}"
+        # return f"{self.custom_id}:{self.name} {self.state}"
+        return f"{self.name}, {self.state}"
 
 
 
@@ -92,18 +97,28 @@ class Locality(BaseModel,CustomIDMixin):
     def __str__(self):
         if self.sub_locality_name:
             
-            return f"{self.custom_id}:{self.locality_type}:{self.sub_locality_name}, {self.name}, {self.city}"
+            # return f"{self.custom_id}:{self.locality_type}:{self.sub_locality_name}, {self.name}, {self.city}"
+            return f"{self.sub_locality_name}, {self.name}, {self.city}"
         else:
-            return f"{self.custom_id}:{self.locality_type}:{self.name}, {self.city}"
+            # return f"{self.custom_id}:{self.locality_type}:{self.name}, {self.city}"
+            return f"{self.name}, {self.city}"
 
 
 # area can have multiple unique locality adn create a area for address 
 
 
-
+class Block(BaseModel,CustomIDMixin):
+    name=models.CharField(max_length=50)
+    # link Block with colony only in later stage to fill data 
+    locality=models.ForeignKey(Locality, verbose_name='locality', on_delete=models.CASCADE)
+    remark=models.TextField(null=True, blank=True)
+    def __str__(self):
+        return f"{self.custom_id}: {self.name}, {self.locality}"
+    
 class Area(BaseModel,CustomIDMixin):
     pin_code = models.CharField(max_length=255, null=True, blank=True)
     localities = models.ManyToManyField('Locality', through='AreaLocality', verbose_name='localities')
+    block=models.ForeignKey(Block, verbose_name='block', on_delete=models.CASCADE, null=True,blank=True)
 
     class Meta:
         verbose_name='Area'
@@ -116,11 +131,32 @@ class Area(BaseModel,CustomIDMixin):
         
         return id_set
 
+
     def __str__(self):
         
-        locality_info = ", ".join([f"{area_loc.locality.locality_type}: {area_loc.locality.sub_locality_name}, {area_loc.locality.name}, {area_loc.locality.city.name}, {area_loc.locality.city.state.name}" for area_loc in self.area_locality_relations.all()])
+        # locality_info = ", ".join([f"{area_loc.locality.locality_type}: {area_loc.locality.sub_locality_name}, {area_loc.locality.name}, {area_loc.locality.city.name}, {area_loc.locality.city.state.name}" for area_loc in self.area_locality_relations.all()])
         locality_id= ", ".join([f"{area_loc.locality.custom_id}" for area_loc in self.area_locality_relations.all()])
-        return f"Area ID: {self.custom_id},  Localities: {locality_info}, Pin Code: {self.pin_code}, ID:{locality_id}"
+        # return f"Area ID: {self.custom_id},  Localities: {locality_info}, Pin Code: {self.pin_code}, ID:{locality_id}"
+        # locality_info = ", ".join([f" {area_loc.locality.sub_locality_name}, {area_loc.locality.name}" for area_loc in self.area_locality_relations.all()])
+        city=set()
+        city_name=None
+        for area_loc in self.area_locality_relations.all():
+            # print("city:",area_loc.locality)
+            city.add(area_loc.locality.city)
+            city_name=area_loc.locality.city
+        
+        if len(city)>1:
+            print("error finding city from locality , multiple city name exits for area :{self.custom_id} ")
+            
+        locality_info = ", ".join([f"{area_loc.locality.sub_locality_name}, {area_loc.locality.name}" 
+                           if area_loc.locality.sub_locality_name is not None 
+                           else f"{area_loc.locality.name}" 
+                           for area_loc in self.area_locality_relations.all()])
+        if self.pin_code:
+            
+            return f"{locality_info}, {city_name}, {self.pin_code}"
+        else:
+            return f"{locality_info}, {city_name}"
         
 
 
@@ -154,64 +190,103 @@ class Landmark(BaseModel,CustomIDMixin):
     
 class Plot(BaseModel, CustomIDMixin):
     plot_no = models.CharField(max_length=255)
-    area = models.ForeignKey(Area, on_delete=models.CASCADE, related_name='plots', null=True, blank=True)
+    area=models.ForeignKey(Area, verbose_name='area', on_delete=models.CASCADE, related_name='plot')
 
     class Meta:
         verbose_name = "Plot"
         verbose_name_plural = "Plots"
         unique_together = [('plot_no', 'area')]
+        
 
     def __str__(self):
-        building = ", ".join([building.name for building in self.plot_building_relationships.all()])
-        
-        return f"{self.custom_id}:{self.plot_no},(Building : {building}),{self.area}"
+        return f"{self.custom_id}:{self.plot_no}"
+
+# class PlotAreaRelationships(BaseModel,CustomIDMixin):
+#     plot=models.ForeignKey(Plot, verbose_name='plot', on_delete=models.CASCADE, related_name='plot_area_relationships')
+    
+#     landmark = models.ForeignKey(Landmark, on_delete=models.CASCADE, related_name='plot_area_relationships')
+#     street = models.ForeignKey(Street, on_delete=models.CASCADE, related_name='plot_area_relationships')
+    
+#     class Meta:
+#         verbose_name = "Plot and area"
+#         verbose_name_plural = "Plot and Area "
+#         unique_together = [('plot', 'area')]
+
 
 class Building(BaseModel,CustomIDMixin):
     name = models.CharField(max_length=255)
+    area=models.ForeignKey(Area, verbose_name='area', on_delete=models.CASCADE, related_name='building')
 
     class Meta:
         verbose_name="Building"
         verbose_name_plural="Building's"
+        unique_together = [('name', 'area')]
 
     def __str__(self):
-        plots = ", ".join([plot.plot_no for plot in self.plot_building_relationships.all()])
-       
-        return f"{self.custom_id}:{self.name}, (Plots: {plots})"
+        plots = ", ".join([obj.plot.plot_no for obj in self.plot_building_relationships.all()])
+        if plots:
+            # return f"{self.custom_id}:{self.name}, (Plots: {plots})"
+            return f"{self.name}, {plots}"
+        else:
+            return f"{self.name}"
 
 class Tower(BaseModel,CustomIDMixin):
     name=models.CharField(max_length=255)
-    block=models.CharField(max_length=255,null=True,blank=True)
+    block=models.CharField(max_length=255,null=True,blank=True, default=None)
+    class Meta:
+        verbose_name="Tower"
+        verbose_name_plural="Tower"
+        unique_together = [('name', 'block')]
+    
+    # def validate_unique(self, exclude=None):
+    #     super().validate_unique(exclude)
+
+    #     if self.block is None:
+    #         # If block is None, check if a Tower with the same name exists
+    #         towers_with_same_name = Tower.objects.filter(name=self.name, block__isnull=True)
+    #         if towers_with_same_name.exists() and self.pk != towers_with_same_name.first().pk:
+    #             raise ValidationError({'name': 'A Tower with this name already exists.'})
+    #     else:
+    #         # If block is not None, check if a Tower with the same name and block exists
+    #         towers_with_same_name_and_block = Tower.objects.filter(name=self.name, block=self.block)
+    #         if towers_with_same_name_and_block.exists() and self.pk != towers_with_same_name_and_block.first().pk:
+    #             raise ValidationError({'block': 'A Tower with this name and block already exists.'})
+            
     
     def __str__(self):
-        building = ", ".join([building.name for building in self.tower_building_relationships.all()])
+        building = ", ".join([obj.building.name for obj in self.tower_building_relationships.all()])
        
         return f"{self.custom_id}:{self.name}, (Building: {building})"
 
 class Floor(BaseModel,CustomIDMixin):
-    name=models.CharField( max_length=50)
+    name=models.CharField( max_length=50, unique=True)
     
     def __str__(self):
-        tower = ", ".join([tower.name for tower in self.floor_tower_relationships.all()])
-        plot = ", ".join([plot.name for plot in self.floor_tower_relationships.all()])
+        tower = ", ".join([obj.tower.name for obj in self.floor_tower_relationships.all()])
+        plot = ", ".join([obj.plot.plot_no for obj in self.floor_plot_relationships.all()])
        
         return f"{self.custom_id}:{self.name}, (Tower: {tower}),(Plot: {plot})"
 
 class Unit(BaseModel,CustomIDMixin):
-    name=models.CharField( max_length=50)
+    name=models.CharField( max_length=50,unique=True)
     
     def __str__(self):
-        floor = ", ".join([floor.name for floor in self.unit_floor_relationships.all()])
+        floor = ", ".join([obj.floor.name for obj in self.unit_floor_relationships.all()])
 
         return f"{self.custom_id}:{self.name}, (Floor: {floor})"
 
 class FloorPlotRelationship(BaseModel,CustomIDMixin):
     floor=models.ForeignKey(Floor, verbose_name='floor', on_delete=models.CASCADE,related_name='floor_plot_relationships')
     plot=models.ForeignKey(Plot, verbose_name='plot', on_delete=models.CASCADE,related_name='floor_plot_relationships')
-    
+    class Meta:
+        unique_together = [('plot', 'floor')]
+        
 class FloorTowerRelationship(BaseModel,CustomIDMixin):
     floor=models.ForeignKey(Floor, verbose_name='floor', on_delete=models.CASCADE,related_name='floor_tower_relationships')
     tower=models.ForeignKey(Tower, verbose_name='tower', on_delete=models.CASCADE,related_name='floor_tower_relationships')
-    
+    class Meta:
+        unique_together = [('floor', 'tower')]
+        
 class PlotBuildingRelationship(BaseModel,CustomIDMixin):
     plot=models.ForeignKey(Plot, verbose_name='plot', on_delete=models.CASCADE,related_name='plot_building_relationships')
     building=models.ForeignKey(Building, verbose_name='building', on_delete=models.CASCADE,related_name='plot_building_relationships')
@@ -246,35 +321,13 @@ class StreetBuildingRelationship(BaseModel, CustomIDMixin):
 class LandmarkPlotRelationship(BaseModel, CustomIDMixin):
     landmark = models.ForeignKey(Landmark, on_delete=models.CASCADE, related_name='landmark_plot_relationships')
     plot = models.ForeignKey(Plot, on_delete=models.CASCADE, related_name='landmark_plot_relationships')
-    
+    class Meta:
+        unique_together = [('plot', 'landmark')]
+        
 class LandmarkBuildingRelationship(BaseModel, CustomIDMixin):
     landmark = models.ForeignKey(Landmark, on_delete=models.CASCADE, related_name='landmark_building_relationships')
     building = models.ForeignKey(Building, on_delete=models.CASCADE, related_name='landmark_building_relationships')
-
-
-
-
-# Create your models here.
-class Address(BaseModel,CustomIDMixin):
-    # address need to have either one of the value to link with property
-    unit_no = models.ForeignKey(Unit, verbose_name="unit", on_delete=models.CASCADE,related_name='addresses', null=True,blank=True)
-    floor = models.ForeignKey(Floor, verbose_name="floor", on_delete=models.CASCADE,related_name='addresses', null=True,blank=True)
-    building = models.ForeignKey(Building, verbose_name="building", on_delete=models.CASCADE,related_name='addresses', null=True,blank=True)
-    plot = models.ForeignKey(Plot, verbose_name="plot", on_delete=models.CASCADE,related_name='addresses', null=True,blank=True)
-
-
     class Meta:
-        verbose_name="Address"
-        verbose_name_plural="Address's"
-        # unique_together = [('unit_no', 'floor','building','plot')]
+        unique_together = [('building', 'landmark')]
 
 
-    def __str__(self):
-        return f"{self.custom_id}:{self.unit_no}{self.floor}{self.building}{self.plot}"
-
-    def clean(self):
-        super().clean()
-        fields = [self.unit_no, self.floor, self.building, self.plot]
-        populated_fields = [field for field in fields if field]
-        if len(populated_fields) != 1:
-            raise ValidationError("Address must have exactly one of the following: unit_no, floor, building, plot")
