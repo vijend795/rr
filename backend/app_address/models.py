@@ -45,14 +45,15 @@ class City(BaseModel,CustomIDMixin):
 
     def __str__(self):
         # return f"{self.custom_id}:{self.name} {self.state}"
-        return f"{self.name}, {self.state}"
+        # return f"{self.name}, {self.state}"
+        return f"{self.name}"
 
 
 
 
 class District(BaseModel,CustomIDMixin):
     name=models.CharField( max_length=255)
-    city=models.ForeignKey(City, verbose_name='city', on_delete=models.CASCADE,related_name='cities')
+    city=models.ForeignKey(City, verbose_name='city', on_delete=models.CASCADE,related_name='districts')
     def __str__(self):
         return f"{self.custom_id}:{self.name} "
 

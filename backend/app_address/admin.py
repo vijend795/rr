@@ -10,7 +10,7 @@ from django.db import models
 # Register your models here.
 
 
-from app_address.models import City,State,Country,Locality,Plot,Building,LocalityType, Area,AreaLocality, Street,Landmark,StreetPlotRelationship, LandmarkPlotRelationship,Unit,Floor,Tower,PlotBuildingRelationship,FloorPlotRelationship,UnitFloorRelationship,FloorTowerRelationship,TowerBuildingRelationship,StreetBuildingRelationship,LandmarkBuildingRelationship,Block
+from app_address.models import City,State,Country,Locality,Plot,Building,LocalityType, Area,AreaLocality, Street,Landmark,StreetPlotRelationship, LandmarkPlotRelationship,Unit,Floor,Tower,PlotBuildingRelationship,FloorPlotRelationship,UnitFloorRelationship,FloorTowerRelationship,TowerBuildingRelationship,StreetBuildingRelationship,LandmarkBuildingRelationship,Block,District,Tehsil
 
 # Inline 
 
@@ -86,20 +86,34 @@ class CountryAdmin(admin.ModelAdmin):
     list_display=('custom_id','name','code',)
     inlines=[StateInline]
 
-    def get_queryset(self, request):
-        queryset = super().get_queryset(request)
-        return queryset.prefetch_related('created_by', 'updated_by')
+    # def get_queryset(self, request):
+    #     queryset = super().get_queryset(request)
+    #     return queryset.prefetch_related('created_by', 'updated_by')
 
 
 class StateAdmin(admin.ModelAdmin):
     model=State
     list_display=('custom_id','name','country',)
     inlines=[CityInline]
+    
+    def get_queryset(self, request):
+        # Use select_related to optimize the query
+        queryset = super().get_queryset(request)
+        queryset = queryset.select_related('country')
+        return queryset
 
 class CityAdmin(admin.ModelAdmin):
     model=City
     list_display=('custom_id','name','state')
     inlines=[LocalityInline]
+    
+    
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        queryset = queryset.select_related('state','state__country').prefetch_related('localities')
+        return queryset
+    
+   
 
 class LocalityTypeAdmin(admin.ModelAdmin):
     model=LocalityType
@@ -115,6 +129,10 @@ class LocalityAdmin(admin.ModelAdmin):
     model=Locality
     list_display=('custom_id','locality_type','sub_locality_name','name', 'tehsil','district','city')
     
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        queryset = queryset.select_related('locality_type','city')
+        return queryset
 
 class AreaLocalityAdmin(admin.ModelAdmin):
     model=AreaLocality
@@ -128,7 +146,19 @@ class AreaAdmin(admin.ModelAdmin):
     model=Area
     list_display=('custom_id','block','display_localities','pin_code')
     inlines=[AreaLocalityInline,PlotInline]
-
+    
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        queryset = queryset.select_related('block').prefetch_related(
+                                'area_locality_relations',
+                                'area_locality_relations__locality',
+                                'area_locality_relations__locality__city',
+                                'plot',
+                               
+                            
+                                )
+        return queryset
+    
     def display_localities(self, obj):
         localities = obj.localities.all()
         
@@ -142,6 +172,18 @@ class AreaAdmin(admin.ModelAdmin):
 class StreetAdmin(admin.ModelAdmin):
     list_display=('custom_id','name','get_plot_numbers','get_buildings','area')   
     inlines=[StreetPlotRelationshipInline,StreetBuildingRelationshipInline]
+    
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        queryset = queryset.select_related('area').prefetch_related(
+                                'area__area_locality_relations',
+                               'street_plot_relationships',
+                               'street_plot_relationships__plot',
+                               'street_building_relationships__building',
+                         
+                            
+                                )
+        return queryset
     
     def get_plot_numbers(self, obj):
         plot_numbers = obj.street_plot_relationships.all().order_by('plot__plot_no')
@@ -163,6 +205,16 @@ class StreetAdmin(admin.ModelAdmin):
 class LandmarkAdmin(admin.ModelAdmin):
     list_display=('custom_id','name','get_plot_numbers','get_buildings',"area")  
     inlines=[LandmarkPlotRelationshipInline,LandmarkBuildingRelationshipInline] 
+    
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        queryset = queryset.select_related('area').prefetch_related(
+                                'area__area_locality_relations__locality__city',
+                                'landmark_plot_relationships__plot',
+                                'landmark_building_relationships__building',
+                                )
+        return queryset
+    
     def get_plot_numbers(self, obj):
         plot_numbers = obj.landmark_plot_relationships.all().order_by('plot__plot_no')
         # return ", ".join(str(relationship.plot.plot_no) for relationship in plot_numbers)
@@ -186,8 +238,28 @@ class LandmarkAdmin(admin.ModelAdmin):
 class PlotAdmin(admin.ModelAdmin):
     list_display=('custom_id','plot_no','area','get_all_streets','get_all_landmark')
     inlines=[StreetPlotRelationshipInline,LandmarkPlotRelationshipInline]
-    list_filter=('area__localities__city__state','area',)
-    search_fields = ['custom_id', 'plot_no', 'area__localities__name', 'area__localities__sub_locality_name']
+    # raw_id_fields = ('area',)
+    list_filter = ('area__id',)
+
+    # list_filter=('area__localities__city__state','area',)
+    # list_filter=('area',)
+   
+    # search_fields = ['custom_id', 'plot_no', 'area__localities__name', 'area__localities__sub_locality_name']
+
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        queryset = queryset.select_related(
+                                            'area'
+                                         
+                                            ) \
+                           .prefetch_related(
+                               'area__area_locality_relations__locality__city',
+
+                            #    'plot_building_relationships__building',
+                               'street_plot_relationships__street',
+                                'landmark_plot_relationships__landmark',
+                                )
+        return queryset
 
 
     def get_all_streets(self, obj):
@@ -213,6 +285,23 @@ class BuildingAdmin(admin.ModelAdmin):
     model=Building
     list_display=('custom_id','name','get_all_towers','get_all_plots','get_all_floor','area')
     inlines=[PlotBuildingRelationshipInline,TowerBuildingRelationshipInline,StreetBuildingRelationshipInline,LandmarkBuildingRelationshipInline]
+    
+    
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        queryset = queryset.select_related('area').prefetch_related(
+                                'plot_building_relationships',
+                                'plot_building_relationships__plot',
+                                'plot_building_relationships__plot__area',
+                                'area__area_locality_relations__locality__city__state__country',
+                                'tower_building_relationships__tower',
+                                'tower_building_relationships__tower__floor_tower_relationships__floor',
+                                'street_building_relationships__street',
+                                'landmark_building_relationships__landmark'
+                               
+                            
+                                )
+        return queryset
     
     def get_all_towers(self,obj):
         towers=obj.tower_building_relationships.all()
@@ -260,6 +349,17 @@ class TowerAdmin(admin.ModelAdmin):
     inlines=[TowerBuildingRelationshipInline,FloorTowerRelationshipInline]
     list_filter=('tower_building_relationships__building','name',)
     
+    
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        queryset = queryset.prefetch_related(
+                               'tower_building_relationships',
+                               'tower_building_relationships__building',
+                            #    'tower_building_relationships__building',
+                               'floor_tower_relationships__floor',
+                            
+                                )
+        return queryset
     def get_all_buildings(self,obj):
         buildings=obj.tower_building_relationships.all()
         if buildings:
@@ -287,6 +387,13 @@ class FloorAdmin(admin.ModelAdmin):
     list_display=('custom_id','name')
     inlines=[FloorTowerRelationshipInline,FloorPlotRelationshipInline,UnitFloorRelationshipInline]
 
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        queryset = queryset.prefetch_related(
+                                'floor_plot_relationships',
+                                'floor_tower_relationships',
+                                )
+        return queryset
 
 class AddressAdmin(admin.ModelAdmin):
     list_display=('custom_id','unit_no','floor','building')

@@ -11,8 +11,10 @@ from django.core.validators import MaxValueValidator
 class BaseModel(models.Model):
     # id=models.UUIDField(primary_key=True,default=uuid.uuid4,editable=False)
     temp_id=models.CharField(max_length=255,null=True, blank=True)
-    created_by=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,related_name='%(class)s_created',null=True,blank=True)
-    updated_by=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,related_name='%(class)s_updated',null=True,blank=True)
+    # created_by=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,related_name='%(class)s_created',null=True,blank=True)
+    # updated_by=models.ForeignKey(settings.AUTH_USER_MODEL,on_delete=models.SET_NULL,related_name='%(class)s_updated',null=True,blank=True)
+    created_by=models.CharField( max_length=50,null=True,blank=True)
+    updated_by=models.CharField( max_length=50,null=True,blank=True)
     created_at=models.DateTimeField(auto_now_add=True,verbose_name='Created At')
     updated_at=models.DateTimeField(auto_now=True,verbose_name='Updated At')
     active_status=models.BooleanField(default=True)
