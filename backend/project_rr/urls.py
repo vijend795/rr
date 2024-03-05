@@ -22,6 +22,7 @@ from django.conf.urls.static import static
 from .views import DashboardView
 
 urlpatterns = [
+    path("__debug__/", include("debug_toolbar.urls")),
     path('admin/', admin.site.urls),
     path('',DashboardView.as_view(), name='dashboard'),
     path('upload',include('app_data_import.urls'))

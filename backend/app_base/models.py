@@ -37,6 +37,7 @@ class BaseModel(models.Model):
         
 
         super().save(*args, **kwargs)
+    
 
 class NewUser(AbstractUser):
     Gender_Choice=[

@@ -86,6 +86,11 @@ class CountryAdmin(admin.ModelAdmin):
     list_display=('custom_id','name','code',)
     inlines=[StateInline]
 
+    def get_queryset(self, request):
+        queryset = super().get_queryset(request)
+        return queryset.prefetch_related('created_by', 'updated_by')
+
+
 class StateAdmin(admin.ModelAdmin):
     model=State
     list_display=('custom_id','name','country',)

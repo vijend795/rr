@@ -49,7 +49,7 @@ class Property(BaseModel,CustomIDMixin):
     def __str__(self):
         return f"{self.custom_id}"
 
-class SubPropertyType(models.Model):
+class SubPropertyType(BaseModel,CustomIDMixin):
     name = models.CharField(max_length=255)
 
     def __str__(self):
@@ -86,13 +86,13 @@ class SubProperty(BaseModel, CustomIDMixin):
 
 
 
-# Signal receiver function to create SubPropertyType instances after migrations
-@receiver(post_migrate)
-def create_sub_property_types(sender, **kwargs):
-    if sender.name == 'your_app_name':
-        # Check if SubPropertyType instances already exist
-        if not SubPropertyType.objects.exists():
-            # Create SubPropertyType instances for unit, floor, and tower
-            SubPropertyType.objects.create(name="Unit")
-            SubPropertyType.objects.create(name="Floor")
-            SubPropertyType.objects.create(name="Tower")
+# # Signal receiver function to create SubPropertyType instances after migrations
+# @receiver(post_migrate)
+# def create_sub_property_types(sender, **kwargs):
+#     if sender.name == 'app_property':
+#         # Check if SubPropertyType instances already exist
+#         if not SubPropertyType.objects.exists():
+#             # Create SubPropertyType instances for unit, floor, and tower
+#             SubPropertyType.objects.create(name="Unit")
+#             SubPropertyType.objects.create(name="Floor")
+#             SubPropertyType.objects.create(name="Tower")
